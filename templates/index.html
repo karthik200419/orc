@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>OCR + Text Summarizer</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <h1>📄 OCR + Text Summarizer</h1>
+
+  <!-- Upload Form -->
+  <form action="/upload" method="post" enctype="multipart/form-data">
+    <input type="file" name="file" accept="image/*" required>
+    <button type="submit">Upload & Summarize</button>
+  </form>
+
+  {% if filename %}
+    <h2>Uploaded Image:</h2>
+    <!-- Correct path using Flask route -->
+    <img src="{{ url_for('uploaded_file', filename=filename) }}" width="400" alt="Uploaded Image">
+  {% endif %}
+
+  {% if extracted_text %}
+    <h2>Extracted Text:</h2>
+    <pre>{{ extracted_text }}</pre>
+  {% endif %}
+
+  {% if summary %}
+    <h2>Summary:</h2>
+    <p>{{ summary }}</p>
+  {% endif %}
+</body>
+</html>

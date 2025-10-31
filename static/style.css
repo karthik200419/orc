@@ -1,0 +1,38 @@
+body {
+  font-family: 'Segoe UI', sans-serif;
+  background: #f5f5f5;
+  padding: 20px;
+  text-align: center;
+}
+
+h1 {
+  color: #333;
+}
+
+form {
+  margin-top: 20px;
+}
+
+button {
+  padding: 8px 20px;
+  border: none;
+  background: #4CAF50;
+  color: white;
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+pre {
+  background: #fff;
+  padding: 10px;
+  border-radius: 8px;
+  width: 70%;
+  margin: auto;
+  text-align: left;
+}
+
+img {
+  margin-top: 15px;
+  border-radius: 8px;
+  box-shadow: 0px 0px 10px gray;
+}
