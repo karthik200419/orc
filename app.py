@@ -1,75 +1,90 @@
-import os
-import uuid
-from flask import Flask, render_template, request, send_from_directory
-import easyocr
-from transformers import pipeline
+from flask import Flask, render_template, request
+import pytesseract
+from PIL import Image
+import torch
+from transformers import VisionEncoderDecoderModel, TrOCRProcessor, pipeline
+import io
+import re
+from textblob import TextBlob
 
-# --- Disable TensorFlow backend and logs ---
-os.environ["USE_TF"] = "0"
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
-
-# --- Initialize Flask app ---
 app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = 'uploads'
 
-# --- Ensure upload folder exists ---
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+# ---- Paths ----
+pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
-# --- Initialize EasyOCR reader ---
-reader = easyocr.Reader(['en'])  # you can add more languages like ['en', 'hi'] for Hindi+English
+# ---- Load OCR Models ----
+trocr_processor = TrOCRProcessor.from_pretrained("microsoft/trocr-base-handwritten")
+trocr_model = VisionEncoderDecoderModel.from_pretrained("microsoft/trocr-base-handwritten")
 
-# --- Load summarization model (uses PyTorch backend) ---
-summarizer = pipeline("summarization", model="sshleifer/distilbart-cnn-6-6")
+# ---- Load Summarizer ----
+summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
 
-# --- Home page route ---
-@app.route('/')
+# ---- OCR Functions ----
+def clean_text(text):
+    text = re.sub(r"[^A-Za-z0-9.,;:!?()'\-\n ]", "", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+def correct_text(text):
+    """Correct grammar and spelling using TextBlob"""
+    try:
+        blob = TextBlob(text)
+        corrected = str(blob.correct())
+        return corrected
+    except Exception:
+        return text
+
+def ocr_tesseract(image):
+    try:
+        text = pytesseract.image_to_string(image, lang="eng")
+        return clean_text(text)
+    except Exception as e:
+        return f"Tesseract Error: {e}"
+
+def ocr_trocr(image):
+    pixel_values = trocr_processor(images=image, return_tensors="pt").pixel_values
+    with torch.no_grad():
+        generated_ids = trocr_model.generate(pixel_values)
+    generated_text = trocr_processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
+    return clean_text(generated_text)
+
+def summarize_text(text):
+    if not text or len(text.split()) < 15:
+        return "Text too short for summarization."
+
+    # ✅ Correct English before summarizing
+    corrected_text = correct_text(text)
+
+    summary = summarizer(corrected_text, max_length=80, min_length=25, do_sample=False)
+    return summary[0]["summary_text"]
+
+# ---- Routes ----
+@app.route("/")
 def index():
-    return render_template('index.html')
+    return render_template("index.html")
 
-# --- Upload & process route ---
-@app.route('/upload', methods=['POST'])
+@app.route("/upload", methods=["POST"])
 def upload():
-    if 'file' not in request.files:
-        return "No file uploaded"
-    file = request.files['file']
-    if file.filename == '':
-        return "No file selected"
+    if "image" not in request.files:
+        return render_template("index.html", text="No image uploaded")
 
-    # Generate unique filename
-    unique_filename = f"{uuid.uuid4().hex}_{file.filename}"
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
+    file = request.files["image"]
+    image = Image.open(io.BytesIO(file.read())).convert("RGB")
 
-    # Save uploaded image
-    file.save(filepath)
+    # Step 1 - Try Tesseract
+    text = ocr_tesseract(image)
 
-    # Perform OCR using EasyOCR
-    result = reader.readtext(filepath, detail=0)
-    extracted_text = " ".join(result)
+    # Step 2 - Fallback to TrOCR if unclear
+    if len(text) < 25:
+        text = ocr_trocr(image)
 
-    # Summarize extracted text
-    if len(extracted_text.strip()) == 0:
-        summary = "No readable text found in image."
-    else:
-        max_input = 500
-        chunks = [extracted_text[i:i + max_input] for i in range(0, len(extracted_text), max_input)]
-        summary_list = []
-        for chunk in chunks:
-            result = summarizer(chunk, max_length=100, min_length=30, do_sample=False)
-            summary_list.append(result[0]['summary_text'])
-        summary = " ".join(summary_list)
+    # Step 3 - Summarize (auto-corrected English)
+    summary = summarize_text(text)
 
-    return render_template(
-        'index.html',
-        extracted_text=extracted_text,
-        summary=summary,
-        filename=unique_filename
-    )
+    # Step 4 - Display both original and corrected text
+    corrected_text = correct_text(text)
 
-# --- Serve uploaded files ---
-@app.route('/uploads/<filename>')
-def uploaded_file(filename):
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+    return render_template("index.html", text=corrected_text, summary=summary)
 
-# --- Run app ---
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run(debug=True)

@@ -2,32 +2,27 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>OCR + Text Summarizer</title>
+  <title>📝 OCR + Summarizer</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-  <h1>📄 OCR + Text Summarizer</h1>
+  <div class="container">
+    <h2>🧠 AI OCR & Text Summarizer</h2>
+    <form action="/upload" method="POST" enctype="multipart/form-data">
+      <input type="file" name="image" accept="image/*" required>
+      <br>
+      <button type="submit">Upload & Analyze</button>
+    </form>
 
-  <!-- Upload Form -->
-  <form action="/upload" method="post" enctype="multipart/form-data">
-    <input type="file" name="file" accept="image/*" required>
-    <button type="submit">Upload & Summarize</button>
-  </form>
+    {% if text %}
+      <h3>Extracted Text:</h3>
+      <textarea readonly>{{ text }}</textarea>
+    {% endif %}
 
-  {% if filename %}
-    <h2>Uploaded Image:</h2>
-    <!-- Correct path using Flask route -->
-    <img src="{{ url_for('uploaded_file', filename=filename) }}" width="400" alt="Uploaded Image">
-  {% endif %}
-
-  {% if extracted_text %}
-    <h2>Extracted Text:</h2>
-    <pre>{{ extracted_text }}</pre>
-  {% endif %}
-
-  {% if summary %}
-    <h2>Summary:</h2>
-    <p>{{ summary }}</p>
-  {% endif %}
+    {% if summary %}
+      <h3>Summary:</h3>
+      <textarea readonly>{{ summary }}</textarea>
+    {% endif %}
+  </div>
 </body>
 </html>
